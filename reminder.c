@@ -6,7 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define EVENTSIZE 365
+#define EXPANDVALUE 15
 
 struct time {
     int seconds;
@@ -26,11 +26,48 @@ struct event {
 };
 
 struct checkReminderArgs {
-    struct event *events;
-    int n;
+    struct event **events;
+    int *n;
 };
 
-void *checkReminders(void *arguments) {
+void checkMemoryAlloc(void *pointer) {
+    if (!pointer) {
+        printf("Memory Allocation failed! Aborting...\n");
+        exit(-1);
+    }
+}
+
+void readReminder(struct event *eventToStore) {
+    // Get reminder data from user and store it.
+    printf("If you do not specify a field it will be set to zero by default.\n");
+    printf("What date? FORMAT: DAY/MONTH/YEAR ");
+    scanf("%d/%d/%d", &eventToStore->Date.day,
+            &eventToStore->Date.month, &eventToStore->Date.year);
+    printf("What time? FORMAT: HOURS:MINUTES:SECONDS ");
+    scanf("%d:%d:%d", &eventToStore->Time.hours,
+            &eventToStore->Time.minutes, &eventToStore->Time.seconds);
+}
+
+void expandReminderArray(struct event **eventAddr, int *n) {
+    // This function is only called if the array is full;
+    // Re-allocate more memory to store more reminder events.
+    unsigned long long newSize = (*n * sizeof(struct event)) 
+            + (sizeof(struct event) * EXPANDVALUE);
+    *eventAddr = (struct event*) realloc(*eventAddr, newSize);
+
+    // Initialize all NEW elements to zero.
+    struct event *eventPointer = *eventAddr + *n;
+    struct event *endEventArray = *eventAddr + (newSize / sizeof(struct event));
+    struct event zeroEvent = {0};
+    while (eventPointer < endEventArray) {
+        *eventPointer = zeroEvent;
+        eventPointer++;
+    }
+    
+    *n += EXPANDVALUE;
+}
+
+void* checkReminders(void *arguments) {
     time_t lastReminderTimeHit = 0;
     while (true) {
         time_t rawtime;
@@ -41,15 +78,15 @@ void *checkReminders(void *arguments) {
         timeinfo = localtime(&rawtime);
 
         // Check if a reminder is matching the local time.
-        struct event *events = ((struct checkReminderArgs*)arguments)->events;
-        int n = ((struct checkReminderArgs*)arguments)->n;
-        for (int i = 0; i < n; i++) {
-            if (events[i].Date.day == timeinfo->tm_mday 
-            && events[i].Date.month == timeinfo->tm_mon + 1 
-            && (events[i].Date.year - 1900) == timeinfo->tm_year 
-            && events[i].Time.seconds == timeinfo->tm_sec 
-            && events[i].Time.minutes == timeinfo->tm_min 
-            && events[i].Time.hours == timeinfo->tm_hour
+        struct event **events = (struct event**) (((struct checkReminderArgs*) arguments)->events);
+        const int *n = (int*) ((struct checkReminderArgs*) arguments)->n;
+        for (int i = 0; i < *n; i++) {
+            if ((*events)[i].Date.day == timeinfo->tm_mday 
+            && (*events)[i].Date.month == timeinfo->tm_mon + 1 
+            && ((*events)[i].Date.year - 1900) == timeinfo->tm_year 
+            && (*events)[i].Time.seconds == timeinfo->tm_sec 
+            && (*events)[i].Time.minutes == timeinfo->tm_min 
+            && (*events)[i].Time.hours == timeinfo->tm_hour
             && lastReminderTimeHit != rawtime) {
                 printf("\nWe have hit the reminder at %s", asctime(timeinfo));
                 lastReminderTimeHit = rawtime;
@@ -61,19 +98,13 @@ void *checkReminders(void *arguments) {
     return NULL;
 }
 
-void checkMemoryAlloc(void* pointer) {
-    if (!pointer) {
-        printf("Memory Allocation failed! Aborting...\n");
-        exit(-1);
-    }
-}
-
 int main() {
     int option = 0;
     int indexReached = 0;
     
     // For holding ALL reminder events.
-    struct event *reminderEvents = (struct event*) calloc(EVENTSIZE, sizeof(struct event));
+    int eventArrSize = 15;
+    struct event *reminderEvents = (struct event*) calloc(eventArrSize, sizeof(struct event));
     checkMemoryAlloc(reminderEvents);
     printf("Easy C-Reminder - Set reminders and remember your tasks!\n\n");
 
@@ -82,8 +113,8 @@ int main() {
     struct checkReminderArgs *rArgs = calloc(1, sizeof(struct checkReminderArgs));
     checkMemoryAlloc(rArgs);
     // Assign values to arguments struct.
-    rArgs->events = reminderEvents;
-    rArgs->n = EVENTSIZE;
+    rArgs->events = &reminderEvents;
+    rArgs->n = &eventArrSize;
 
     // Create and run thread.
     int rc = pthread_create(&thread_id, NULL, (void*)checkReminders, (void *)rArgs);
@@ -106,17 +137,18 @@ int main() {
         switch (option) {
             // Set a reminder.
             case 1:
-                if (indexReached >= EVENTSIZE) {
-                    printf("Your calendar is totally full!\n");
+                if (indexReached == eventArrSize) {
+                    // The array of reminders is totally full;
+                    // re-allocate more memory to store more reminders.
+                    expandReminderArray(&reminderEvents, &eventArrSize);
+
+                    readReminder(eventToStore);
+                    // Store the reminder event.
+                    reminderEvents[indexReached] = *eventToStore;
+                    indexReached++;
                     continue;
                 }
-                printf("If you do not specify a field it will be set to zero by default.\n");
-                printf("What date? FORMAT: DAY/MONTH/YEAR ");
-                scanf("%d/%d/%d", &eventToStore->Date.day,
-                      &eventToStore->Date.month, &eventToStore->Date.year);
-                printf("What time? FORMAT: HOURS:MINUTES:SECONDS ");
-                scanf("%d:%d:%d", &eventToStore->Time.hours,
-                      &eventToStore->Time.minutes, &eventToStore->Time.seconds);
+                readReminder(eventToStore);
 
                 // Store the reminder event.
                 reminderEvents[indexReached] = *eventToStore;
@@ -129,6 +161,9 @@ int main() {
                 break;
         }
     }
+
+    free(reminderEvents);
+    free(rArgs);
 
     return 0;
 }
