@@ -5,6 +5,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+// REMOVE THIS INCLUDE IF NOT ON WINDOWS
+#include <windows.h>
 
 #define EXPANDVALUE 15
 
@@ -21,6 +23,8 @@ struct date {
 };
 
 struct event {
+    char name[150];
+    char description[300];
     struct time Time;
     struct date Date;
 };
@@ -39,13 +43,24 @@ void checkMemoryAlloc(void *pointer) {
 
 void readReminder(struct event *eventToStore) {
     // Get reminder data from user and store it.
+    char reminderDate[100], reminderTime[100];
     printf("If you do not specify a field it will be set to zero by default.\n");
+    printf("Name of reminder (Max. 150 characters): ");
+    fgets(eventToStore->name, sizeof(eventToStore->name), stdin);
+    // Remove newline.
+    eventToStore->name[strcspn(eventToStore->name, "\n")] = 0;
+    printf("Description of reminder (Max. 300 characters): ");
+    fgets(eventToStore->description, sizeof(eventToStore->description), stdin);
+    eventToStore->name[strcspn(eventToStore->description, "\n")] = 0;
+
     printf("What date? FORMAT: DAY/MONTH/YEAR ");
-    scanf("%d/%d/%d", &eventToStore->Date.day,
-            &eventToStore->Date.month, &eventToStore->Date.year);
+    fgets(reminderDate, sizeof(reminderDate), stdin);
+    sscanf(reminderDate, "%d %*c %d %*c %d", 
+        &eventToStore->Date.day, &eventToStore->Date.month, &eventToStore->Date.year);
     printf("What time? FORMAT: HOURS:MINUTES:SECONDS ");
-    scanf("%d:%d:%d", &eventToStore->Time.hours,
-            &eventToStore->Time.minutes, &eventToStore->Time.seconds);
+    fgets(reminderTime, sizeof(reminderTime), stdin);
+    sscanf(reminderTime, "%d %*c %d %*c %d", &eventToStore->Time.hours,
+        &eventToStore->Time.minutes, &eventToStore->Time.seconds);
 }
 
 void expandReminderArray(struct event **eventAddr, int *n) {
@@ -88,7 +103,11 @@ void* checkReminders(void *arguments) {
             && (*events)[i].Time.minutes == timeinfo->tm_min 
             && (*events)[i].Time.hours == timeinfo->tm_hour
             && lastReminderTimeHit != rawtime) {
-                printf("\nWe have hit the reminder at %s", asctime(timeinfo));
+                printf("\nRemember your task: %s - %s", (*events)[i].name, asctime(timeinfo));
+                printf("Description: %s", (*events)[i].description);
+                // CHANGE OR COMMENT OUT THIS LINE IF YOU'RE ON A DIFFERENT OS THAN WINDOWS.
+                MessageBeep(MB_ICONWARNING);
+                
                 lastReminderTimeHit = rawtime;
             }
         }
@@ -123,7 +142,7 @@ int main() {
         exit(-1);
     }
     // Run thread.
-    pthread_join((void *)&thread_id, NULL);
+    pthread_join((void *) &thread_id, NULL);
 
     // Start main loop for creating reminders.
     bool isRunning = true;
@@ -132,6 +151,8 @@ int main() {
         printf("What do you want to do?\n");
         printf("1: Set a reminder. 2: Quit. ");
         scanf("%d", &option);
+        // Remove newline left in input stream.
+        getchar();
 
         struct event *eventToStore = (struct event*) calloc(1, sizeof(struct event));
         switch (option) {
@@ -160,6 +181,7 @@ int main() {
                 isRunning = false;
                 break;
         }
+        free(eventToStore);
     }
 
     free(reminderEvents);
