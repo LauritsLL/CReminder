@@ -5,8 +5,16 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-// REMOVE THIS INCLUDE IF NOT ON WINDOWS
-#include <windows.h>
+#if defined(_WIN32)
+    #include <windows.h> // Windows
+    #define ON_WIN
+#elif defined(_WIN64)
+    #include <windows.h> // Windows
+    #define ON_WIN
+#elif defined(__CYGWIN__) && !defined(_WIN32)
+    #include <windows.h> // Windows (Cygwin POSIX under Microsoft Window)
+    #define ON_WIN
+#endif
 
 #define EXPANDVALUE 15
 
@@ -34,9 +42,10 @@ struct checkReminderArgs {
     int *n;
 };
 
-void sleep_ms(int milliseconds) // cross-platform sleep function
+// Cross-platform sleep function
+void sleep_ms(int milliseconds)
 {
-    #ifdef WIN32
+    #ifdef ON_WIN
         Sleep(milliseconds);
     #elif _POSIX_C_SOURCE >= 199309L
         struct timespec ts;
@@ -48,6 +57,7 @@ void sleep_ms(int milliseconds) // cross-platform sleep function
     #endif
 }
 
+// Check if allocated memory is valid.
 void checkMemoryAlloc(void *pointer) {
     if (!pointer) {
         printf("Memory Allocation failed! Aborting...\n");
@@ -55,32 +65,42 @@ void checkMemoryAlloc(void *pointer) {
     }
 }
 
+// Remove a trailing newline.
+void removeNewline(char *str) {
+    // Set newline to null character.
+    str[strcspn(str, "\n")] = 0;
+}
+
+// Get reminder data.
 void readReminder(struct event *eventToStore) {
     // Get reminder data from user and store it.
     char reminderDate[100], reminderTime[100];
     printf("If you do not specify a field it will be set to zero by default.\n");
+
     printf("Name of reminder (Max. 150 characters): ");
     fgets(eventToStore->name, sizeof(eventToStore->name), stdin);
-    // Remove newline.
-    eventToStore->name[strcspn(eventToStore->name, "\n")] = 0;
+    removeNewline(eventToStore->name);
+
     printf("Description of reminder (Max. 300 characters): ");
     fgets(eventToStore->description, sizeof(eventToStore->description), stdin);
-    eventToStore->name[strcspn(eventToStore->description, "\n")] = 0;
+    removeNewline(eventToStore->description);
 
     printf("What date? FORMAT: DAY/MONTH/YEAR ");
     fgets(reminderDate, sizeof(reminderDate), stdin);
     sscanf(reminderDate, "%d %*c %d %*c %d", 
         &eventToStore->Date.day, &eventToStore->Date.month, &eventToStore->Date.year);
+    
     printf("What time? FORMAT: HOURS:MINUTES:SECONDS ");
     fgets(reminderTime, sizeof(reminderTime), stdin);
     sscanf(reminderTime, "%d %*c %d %*c %d", &eventToStore->Time.hours,
         &eventToStore->Time.minutes, &eventToStore->Time.seconds);
 }
 
+// Dynamically expand reminder array.
 void expandReminderArray(struct event **eventAddr, int *n) {
     // This function is only called if the array is full;
     // Re-allocate more memory to store more reminder events.
-    unsigned long long newSize = (*n * sizeof(struct event)) 
+    size_t newSize = (*n * sizeof(struct event)) 
             + (sizeof(struct event) * EXPANDVALUE);
     *eventAddr = (struct event*) realloc(*eventAddr, newSize);
 
@@ -96,6 +116,7 @@ void expandReminderArray(struct event **eventAddr, int *n) {
     *n += EXPANDVALUE;
 }
 
+// Multi-threaded function to check if any reminders has been hit.
 void* checkReminders(void *arguments) {
     time_t lastReminderTimeHit = 0;
     while (true) {
@@ -119,9 +140,11 @@ void* checkReminders(void *arguments) {
             && lastReminderTimeHit != rawtime) {
                 printf("\nRemember your task: %s - %s", (*events)[i].name, asctime(timeinfo));
                 printf("Description: %s", (*events)[i].description);
-                // CHANGE OR COMMENT OUT THIS LINE IF YOU'RE ON A DIFFERENT OS THAN WINDOWS.
-                MessageBeep(MB_ICONWARNING);
-                
+                // Only if on windows platform.
+                #ifdef ON_WIN
+                    MessageBeep(MB_ICONWARNING);
+                #endif
+
                 lastReminderTimeHit = rawtime;
             }
         }
@@ -136,7 +159,7 @@ int main() {
     int indexReached = 0;
     
     // For holding ALL reminder events.
-    int eventArrSize = 15;
+    int eventArrSize = EXPANDVALUE; // Same as EXPANDVALUE of array.
     struct event *reminderEvents = (struct event*) calloc(eventArrSize, sizeof(struct event));
     checkMemoryAlloc(reminderEvents);
     printf("Easy C-Reminder - Set reminders and remember your tasks!\n\n");
