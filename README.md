@@ -1,4 +1,4 @@
-![Lines of Code](https://tokei.rs/b1/github/Lause132/CReminder?category=code) 
+![Lines of Code](https://tokei.rs/b1/github/LauritsLL/CReminder?category=code) 
 
 ### **THIS PROGRAM IS STILL IN DEVELOPMENT**
 
@@ -12,7 +12,7 @@ Well, look no further - I present to you, the CReminder!
 ### Installation and Running the Program
 
 1. Clone this repository.
-`git clone https://github.com/Lause132/CReminder`
+`git clone https://github.com/LauritsLL/CReminder`
 2. Install your prefered [C Compiler](#inst-c-compiler) (`gcc`, `clang`, ..)
 
 To run this program you compile the program with the `-lpthread` flag to support multi-threading as this program is using that.
