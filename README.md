@@ -1,7 +1,5 @@
 ![Lines of Code](https://tokei.rs/b1/github/LauritsLL/CReminder?category=code) 
 
-### **THIS PROGRAM IS STILL IN DEVELOPMENT**
-
 ## CReminder - A Reminder to help you remember tasks!
 
 (This text is all a joke - Please don't take it seriously)
